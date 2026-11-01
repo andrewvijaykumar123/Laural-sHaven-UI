@@ -64,6 +64,10 @@ function formatCurrency(value) {
   return currencyFormatter.format(value);
 }
 
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function showToast(message) {
   const toast = elements.toast;
   toast.textContent = message;
@@ -114,7 +118,7 @@ function renderCart() {
         <div class="cart-line">
           <div class="cart-line-main">
             <div>
-              <div class="cart-name">${item.name}</div>
+              <div class="cart-name">${esc(item.name)}</div>
               <div class="cart-meta">
                 <span>${formatCurrency(item.price)}</span>
                 <span>•</span>
@@ -122,9 +126,9 @@ function renderCart() {
               </div>
             </div>
             <div class="qty-controls">
-              <button type="button" class="qty-button" data-action="decrement" data-id="${item.id}">−</button>
+              <button type="button" class="qty-button" data-action="decrement" data-id="${esc(item.id)}">−</button>
               <span>${item.qty}</span>
-              <button type="button" class="qty-button" data-action="increment" data-id="${item.id}">+</button>
+              <button type="button" class="qty-button" data-action="increment" data-id="${esc(item.id)}">+</button>
             </div>
           </div>
         </div>
@@ -169,18 +173,18 @@ function buildMenuCards(menu) {
     .map(
       (section) => `
         <article class="category-card">
-          <h4>${section.category}</h4>
+          <h4>${esc(section.category)}</h4>
           <div class="menu-list">
             ${section.items
               .map(
                 (item) => `
                   <div class="menu-item">
                     <div class="menu-item-copy">
-                      <h5>${item.name}</h5>
+                      <h5>${esc(item.name)}</h5>
                     </div>
                     <span class="item-price">${formatCurrency(item.price)}</span>
                     <div class="menu-item-actions">
-                      <button type="button" class="add-button" data-add-id="${item.id}" data-name="${item.name}" data-price="${item.price}" data-qty="1">Add</button>
+                      <button type="button" class="add-button" data-add-id="${esc(item.id)}" data-name="${esc(item.name)}" data-price="${esc(item.price)}" data-qty="1">Add</button>
                     </div>
                   </div>
                 `
@@ -360,8 +364,8 @@ function showConfirmation(order, _status = 'synced') {
     .map(
       (item) => `
         <li>
-          <span>${item.name}</span>
-          <span>${item.qty}x</span>
+          <span>${esc(item.name)}</span>
+          <span>${esc(item.qty)}x</span>
           <span>${formatCurrency((Number(item.price) || 0) * (Number(item.qty) || 1))}</span>
         </li>
       `

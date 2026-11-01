@@ -31,18 +31,29 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || defaultAllowedOrigins.joi
   .map((origin) => origin.trim())
   .filter(Boolean);
 const orders = [];
+const MAX_ORDERS = 500;
+const IS_PROD = process.env.NODE_ENV === 'production';
+// Admin endpoints need this token (Authorization: Bearer ...). In production it must be set; locally a random one is printed at startup.
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || (IS_PROD ? '' : crypto.randomBytes(18).toString('base64url'));
 
-app.use(express.json({ limit: '1mb' }));
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+app.use(express.json({ limit: '20kb' }));
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const isAllowedOrigin = !origin ||
     allowedOrigins.includes(origin) ||
-    /^https?:\/\/localhost(?::\d+)?$/.test(origin) ||
-    /(?:github\.io|pages\.dev)$/i.test(origin) ||
-    /https?:\/\/.*\.github\.io(?:\/[A-Za-z0-9._-]+)?$/i.test(origin);
+    /^https?:\/\/localhost(?::\d+)?$/.test(origin);
 
   if (isAllowedOrigin && origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
@@ -54,19 +65,33 @@ app.use((req, res, next) => {
 
   next();
 });
-app.use((error, _req, res, _next) => {
-  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid JSON payload. Please send a valid request body.'
-    });
-  }
 
-  return res.status(500).json({
-    success: false,
-    message: 'Unexpected server error.'
-  });
-});
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TOKEN) {
+    return res.status(503).json({ success: false, message: 'Admin access is not configured.' });
+  }
+  const given = Buffer.from(String(req.headers.authorization || '').replace(/^Bearer /, ''));
+  const wanted = Buffer.from(ADMIN_TOKEN);
+  if (given.length !== wanted.length || !crypto.timingSafeEqual(given, wanted)) {
+    return res.status(401).json({ success: false, message: 'Admin sign-in required.' });
+  }
+  return next();
+}
+
+const hits = new Map();
+function rateLimit(max, windowMs) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const recent = (hits.get(`${req.path}|${req.ip}`) || []).filter((t) => now - t < windowMs);
+    if (recent.length >= max) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Please try again shortly.' });
+    }
+    recent.push(now);
+    hits.set(`${req.path}|${req.ip}`, recent);
+    if (hits.size > 5000) hits.clear();
+    return next();
+  };
+}
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -187,6 +212,7 @@ const menu = [
     { id: 'veg-salad-banana-shake', name: 'Veg Salad + Red Banana Shake', price: 299 }
   ]}
 ];
+const menuById = new Map(menu.flatMap((group) => group.items).map((item) => [item.id, item]));
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('en-IN', {
@@ -265,7 +291,7 @@ app.get('/api/menu', (_req, res) => {
 app.get('/api/qr', async (req, res) => {
   try {
     const amount = Number(req.query.amount || 0);
-    const upiLink = createUpiLink(amount);
+    const upiLink = createUpiLink(Number.isFinite(amount) ? Math.min(Math.max(amount, 0), 100000) : 0);
     const qrDataUrl = await QRCode.toDataURL(upiLink, {
       errorCorrectionLevel: 'M',
       margin: 2,
@@ -284,15 +310,15 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: "Laural's Haven ordering app" });
 });
 
-app.get('/api/orders', (_req, res) => {
+app.get('/api/orders', requireAdmin, (_req, res) => {
   res.json({ success: true, orders: orders.map(toPublicOrder).slice(0, 50) });
 });
 
-app.get('/api/admin/summary', (_req, res) => {
+app.get('/api/admin/summary', requireAdmin, (_req, res) => {
   res.json({ success: true, summary: buildAdminSummary() });
 });
 
-app.patch('/api/orders/:id/status', (req, res) => {
+app.patch('/api/orders/:id/status', requireAdmin, (req, res) => {
   const { id } = req.params;
   const requestedStatus = normalizeOrderStatus(req.body?.status);
   const orderIndex = orders.findIndex((order) => order.id === id);
@@ -311,23 +337,37 @@ app.patch('/api/orders/:id/status', (req, res) => {
   return res.json({ success: true, order: toPublicOrder(orders[orderIndex]) });
 });
 
-app.post('/api/checkout', async (req, res) => {
-  const payload = req.body || {};
-  const customerName = String(payload.customerName || '').trim();
-  const phone = String(payload.phone || '').trim();
-  const notes = String(payload.notes || '').trim();
-  const paymentMethod = String(payload.paymentMethod || 'upi').trim();
-  const orderItems = Array.isArray(payload.items) ? payload.items : [];
-  const transactionRef = String(payload.transactionRef || `LH-${crypto.randomBytes(6).toString('hex').toUpperCase()}`);
-  const subtotal = Number(payload.subtotal || 0);
-  const total = Number(payload.total || subtotal);
+app.post('/api/checkout', rateLimit(20, 10 * 60 * 1000), async (req, res) => {
+  const payload = req.body && typeof req.body === 'object' ? req.body : {};
+  const text = (value, max) => String(value ?? '').replace(/[<>\u0000-\u001f]/g, ' ').trim().slice(0, max);
+  const customerName = text(payload.customerName, 60);
+  const phone = text(payload.phone, 20);
+  const notes = text(payload.notes, 300);
+  const paymentMethod = text(payload.paymentMethod, 20).toLowerCase() || 'upi';
+  const requestedItems = Array.isArray(payload.items) ? payload.items : [];
+  const transactionRef = /^[A-Za-z0-9-]{4,40}$/.test(String(payload.transactionRef || ''))
+    ? String(payload.transactionRef)
+    : `LH-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
 
-  if (!customerName || !phone || orderItems.length === 0) {
+  if (!customerName || !/^[+0-9 ()-]{7,20}$/.test(phone) || requestedItems.length === 0 || requestedItems.length > 60) {
     return res.status(400).json({
       success: false,
       message: 'Customer name, phone number and at least one menu item are required.'
     });
   }
+
+  // Names and prices always come from the server menu, never from the request.
+  const orderItems = [];
+  for (const requested of requestedItems) {
+    const entry = menuById.get(requested && requested.id);
+    const qty = Number(requested && requested.qty !== undefined ? requested.qty : 1);
+    if (!entry || !Number.isInteger(qty) || qty < 1 || qty > 25) {
+      return res.status(400).json({ success: false, message: 'One or more items in the order are not valid.' });
+    }
+    orderItems.push({ id: entry.id, name: entry.name, qty, price: entry.price });
+  }
+  const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const total = subtotal;
 
   const normalizedOrder = {
     id: createOrderId(),
@@ -340,17 +380,13 @@ app.post('/api/checkout', async (req, res) => {
     status: 'pending',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    items: orderItems.map((item) => ({
-      id: item.id,
-      name: item.name,
-      qty: Number(item.qty || 1),
-      price: Number(item.price || 0)
-    })),
+    items: orderItems,
     subtotal,
     total
   };
 
   orders.unshift(normalizedOrder);
+  orders.length = Math.min(orders.length, MAX_ORDERS);
 
   return res.status(200).json({
     success: true,
@@ -365,8 +401,30 @@ app.get('/admin', (_req, res) => {
   res.sendFile(path.join(__dirname, 'admin', 'index.html'));
 });
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ success: false, message: 'Not found.' });
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.use((error, _req, res, _next) => {
+  if (error && error.type === 'entity.too.large') {
+    return res.status(413).json({ success: false, message: 'Request is too large.' });
+  }
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON payload. Please send a valid request body.'
+    });
+  }
+
+  console.error('Unhandled error:', error);
+  return res.status(500).json({
+    success: false,
+    message: 'Unexpected server error.'
+  });
 });
 
 function startServer(port, attempted = new Set()) {
@@ -377,6 +435,9 @@ function startServer(port, attempted = new Set()) {
     console.log(`Admin console is available at http://localhost:${port}/admin`);
     console.log(`Configured UPI ID: ${UPI_ID}`);
     console.log('Kitchen queue sync is active.');
+    if (!process.env.ADMIN_TOKEN) {
+      console.log(ADMIN_TOKEN ? `Admin password for this session (set ADMIN_TOKEN to keep it): ${ADMIN_TOKEN}` : 'ADMIN_TOKEN is not set: admin endpoints are disabled.');
+    }
   });
 
   server.on('error', (error) => {

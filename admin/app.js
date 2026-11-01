@@ -1,4 +1,4 @@
-const ADMIN_PASSWORD = 'MyLove4Jesu$';
+const TOKEN_KEY = 'lauralsHavenAdminToken';
 const API_BASE = 'http://localhost:3001';
 window.LH_API_BASE = API_BASE;
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -37,10 +37,19 @@ const elements = {
 };
 
 function isAuthorized() {
-  return sessionStorage.getItem('lauralsHavenAdminPassword') === ADMIN_PASSWORD;
+  return Boolean(sessionStorage.getItem(TOKEN_KEY));
+}
+
+function authHeaders(extra = {}) {
+  return { ...extra, Authorization: `Bearer ${sessionStorage.getItem(TOKEN_KEY) || ''}` };
+}
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function showAuthScreen(message = '') {
+  sessionStorage.removeItem(TOKEN_KEY);
   if (elements.authError) {
     elements.authError.textContent = message;
   }
@@ -49,7 +58,6 @@ function showAuthScreen(message = '') {
 }
 
 function unlockAdmin() {
-  sessionStorage.setItem('lauralsHavenAdminPassword', ADMIN_PASSWORD);
   elements.adminAuth.classList.add('hidden-shell');
   elements.dashboardShell.classList.remove('hidden-shell');
 }
@@ -88,9 +96,9 @@ function renderSummary(summary) {
       (item, index) => `
         <li>
           <div>
-            <strong>${index + 1}. ${item.name}</strong>
+            <strong>${index + 1}. ${esc(item.name)}</strong>
           </div>
-          <span class="count-badge">${item.quantity}</span>
+          <span class="count-badge">${esc(item.quantity)}</span>
         </li>
       `
     )
@@ -105,18 +113,19 @@ function renderOrders(orders) {
 
   elements.ordersTable.innerHTML = orders
     .map((order) => {
-      const status = order.status || 'pending';
+      const status = ['pending', 'accepted', 'ready', 'cooking', 'rejected', 'completed', 'delivered'].includes(order.status) ? order.status : 'pending';
       const itemList = Array.isArray(order.items) ? order.items.map((item) => `${item.name} × ${item.qty}`).join(', ') : 'No items';
+      const orderId = esc(order.id);
 
       return `
         <div class="order-row">
           <div>
-            <div class="order-name">${order.customerName || 'Guest'}</div>
-            <div class="secondary-text">${order.phone || 'No phone'} • ${order.email || 'No email'}</div>
+            <div class="order-name">${esc(order.customerName || 'Guest')}</div>
+            <div class="secondary-text">${esc(order.phone || 'No phone')} • ${esc(order.email || 'No email')}</div>
           </div>
           <div>
             <div class="secondary-text">Order</div>
-            <div class="order-name">${order.id}</div>
+            <div class="order-name">${orderId}</div>
           </div>
           <div>
             <div class="secondary-text">Created</div>
@@ -124,7 +133,7 @@ function renderOrders(orders) {
           </div>
           <div>
             <div class="secondary-text">Items</div>
-            <div>${itemList.slice(0, 40)}${itemList.length > 40 ? '…' : ''}</div>
+            <div>${esc(itemList.slice(0, 40))}${itemList.length > 40 ? '…' : ''}</div>
           </div>
           <div>
             <div class="secondary-text">Total</div>
@@ -133,9 +142,9 @@ function renderOrders(orders) {
           <div>
             <span class="status-pill ${status}">${status}</span>
             <div class="action-group" style="margin-top: 10px;">
-              ${status === 'pending' ? '<button class="accept" data-order-id="' + order.id + '" data-status="accepted">Accept</button>' : ''}
-              ${status === 'accepted' ? '<button class="ready" data-order-id="' + order.id + '" data-status="ready">Ready</button>' : ''}
-              ${status === 'ready' ? '<button class="deliver" data-order-id="' + order.id + '" data-status="delivered">Deliver</button>' : ''}
+              ${status === 'pending' ? '<button class="accept" data-order-id="' + orderId + '" data-status="accepted">Accept</button>' : ''}
+              ${status === 'accepted' ? '<button class="ready" data-order-id="' + orderId + '" data-status="ready">Ready</button>' : ''}
+              ${status === 'ready' ? '<button class="deliver" data-order-id="' + orderId + '" data-status="delivered">Deliver</button>' : ''}
             </div>
           </div>
         </div>
@@ -147,9 +156,14 @@ function renderOrders(orders) {
 async function loadDashboard() {
   try {
     const [summaryResponse, ordersResponse] = await Promise.all([
-      fetch(apiUrl('/api/admin/summary'), { cache: 'no-store' }),
-      fetch(apiUrl('/api/orders'), { cache: 'no-store' })
+      fetch(apiUrl('/api/admin/summary'), { cache: 'no-store', headers: authHeaders() }),
+      fetch(apiUrl('/api/orders'), { cache: 'no-store', headers: authHeaders() })
     ]);
+
+    if (summaryResponse.status === 401 || ordersResponse.status === 401) {
+      showAuthScreen('Session expired. Please sign in again.');
+      return;
+    }
 
     const summaryData = await summaryResponse.json();
     const ordersData = await ordersResponse.json();
@@ -167,9 +181,9 @@ async function loadDashboard() {
 
 async function updateStatus(orderId, status) {
   try {
-    const response = await fetch(apiUrl(`/api/orders/${orderId}/status`), {
+    const response = await fetch(apiUrl(`/api/orders/${encodeURIComponent(orderId)}/status`), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ status })
     });
 
@@ -196,18 +210,28 @@ document.addEventListener('click', (event) => {
 });
 
 if (elements.adminLoginForm) {
-  elements.adminLoginForm.addEventListener('submit', (event) => {
+  elements.adminLoginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const password = elements.adminPassword.value.trim();
-
-    if (password === ADMIN_PASSWORD) {
-      unlockAdmin();
-      loadDashboard();
-      return;
-    }
-
-    showAuthScreen('Incorrect password. Please try again.');
     elements.adminPassword.value = '';
+
+    try {
+      const response = await fetch(apiUrl('/api/admin/summary'), {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${password}` }
+      });
+
+      if (response.ok) {
+        sessionStorage.setItem(TOKEN_KEY, password);
+        unlockAdmin();
+        loadDashboard();
+        return;
+      }
+
+      showAuthScreen(response.status === 503 ? 'Admin access is not configured on the server.' : 'Incorrect password. Please try again.');
+    } catch (error) {
+      showAuthScreen('The admin service is unreachable. Please try again.');
+    }
   });
 }
 
