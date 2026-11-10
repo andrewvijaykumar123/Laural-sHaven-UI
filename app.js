@@ -55,8 +55,30 @@
     setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, 3200);
   }
 
+  /* ---------- Last-resort error reporting ---------- */
+  // An uncaught error must never leave the page looking dead; tell the customer, but do not spam them.
+  let lastErr = 0;
+  const reportError = () => {
+    const t = Date.now();
+    if (t - lastErr < 5000) return;
+    lastErr = t;
+    try { toast('Something went wrong. Please reload the page if it misbehaves.', 'bad'); } catch (e) { /* nothing else we can do */ }
+  };
+  // Offline/network Firestore failures are expected and already surfaced elsewhere, so they never raise this alarm.
+  const noisyReason = (r) => !!r && (r.code === 'unavailable' || r.code === 'offline' || r.code === 'cancelled' || r.name === 'AbortError');
+  window.addEventListener('error', reportError);
+  window.addEventListener('unhandledrejection', (e) => { if (!noisyReason(e && e.reason)) reportError(); });
+
   /* ---------- Theme ---------- */
-  const setTheme = (t) => { document.documentElement.dataset.theme = t; store.set('theme', t); };
+  const setTheme = (t) => {
+    document.documentElement.dataset.theme = t;
+    store.set('theme', t);
+    const btn = $('#themeBtn');
+    if (btn) {
+      btn.textContent = t === 'dark' ? '🌙' : '☀️';
+      btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} theme`);
+    }
+  };
   setTheme(store.get('theme', matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
   $('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
 
@@ -383,7 +405,22 @@
   $('#scrim').addEventListener('click', () => closeDrawers());
   $$('[data-close]').forEach((b) => b.addEventListener('click', () => closeDrawers()));
   $('#cartDrawer').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeDrawers(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeTrack(); closeDrawers(); } });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeModal(); closeTrack(); closeDrawers(); return; }
+    if (e.key !== 'Tab') return;
+    // Keep Tab inside the open modal or the tracking view (focus trap).
+    const box = !$('#modal').hidden ? $('#modalCard') : !$('#trackView').hidden ? $('#trackView') : null;
+    if (!box) return;
+    const items = $$('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', box)
+      .filter((el) => el.offsetParent !== null || el === document.activeElement);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    const inside = box.contains(document.activeElement);
+    if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+  });
+  // The checkout and booking forms have no submit action (CSP form-action 'none'); stop Enter from trying to submit them.
+  document.addEventListener('submit', (e) => { if (e.target && (e.target.id === 'coForm' || e.target.id === 'evForm')) e.preventDefault(); });
   $('#cartBtn').addEventListener('click', () => openDrawer('cartDrawer'));
   $('#cartBarBtn').addEventListener('click', () => openDrawer('cartDrawer'));
   $('#ordersBtn').addEventListener('click', () => openDrawer('ordersDrawer'));
@@ -647,11 +684,27 @@
   }
 
   /* Invoice (no GST) for the customer's own order, downloaded as a PDF; the print dialog is the fallback. */
+  // invoicepdf.js is only needed when an invoice is actually downloaded, so it is fetched on demand.
+  let invoicePdfLoad = null;
+  const loadInvoicePdf = () => {
+    if (window.LHInvoicePdf) return Promise.resolve(window.LHInvoicePdf);
+    if (invoicePdfLoad) return invoicePdfLoad;
+    invoicePdfLoad = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'invoicepdf.js?v=20261101c';
+      s.onload = () => (window.LHInvoicePdf ? resolve(window.LHInvoicePdf) : reject(new Error('Invoice builder missing')));
+      s.onerror = () => { invoicePdfLoad = null; reject(new Error('Invoice builder could not load')); };
+      document.head.appendChild(s);
+    });
+    return invoicePdfLoad;
+  };
+
   async function printInvoice(o) {
     if (!o || !window.LHMail) return;
     const paid = !!o.payVerified || o.status === 'completed';
     try {
-      await window.LHInvoicePdf.download(LH, window.LHMail, o, paid);
+      const pdf = await loadInvoicePdf();
+      await pdf.download(LH, window.LHMail, o, paid);
       toast('Invoice downloaded.');
       return;
     } catch (err) { /* fall through to print */ }
@@ -717,6 +770,18 @@
       $('.star-word', grp).textContent = STAR_WORDS[n] || '';
       $('#fbMsg').textContent = '';
     } else if (e.target.closest('#fbSend')) sendRate();
+  });
+  // Arrow keys move within a star-rating group (the radiogroup keyboard pattern).
+  $('#modalCard').addEventListener('keydown', (e) => {
+    const star = e.target.closest('.stars button');
+    if (!star || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const btns = $$('button', star.closest('.stars'));
+    const i = btns.indexOf(star);
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? btns.length - 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? i - 1 : i + 1;
+    const target = btns[Math.max(0, Math.min(btns.length - 1, next))];
+    target.focus();
+    target.click();
   });
 
   $('#ordersBody').addEventListener('click', (e) => {

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://andrewvijaykumar123.github.io/Laural-sHaven-UI/sitemap.xml

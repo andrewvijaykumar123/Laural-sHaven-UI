@@ -160,7 +160,9 @@
     const put = (x) => { const b = typeof x === 'string' ? enc.encode(x) : x; parts.push(b); len += b.length; };
     const obj = (n, body) => { offs[n] = len; put(`${n} 0 obj\n`); body(); put('\nendobj\n'); };
     const PW = 595.28, PH = 841.89;
-    put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+    put(enc.encode('%PDF-1.4\n'));
+    // Binary comment so the file is clearly PDF data, not text (raw bytes, not UTF-8 code points).
+    put(new Uint8Array([0x25, 0xE2, 0xE3, 0xCF, 0xD3, 0x0A]));
     obj(1, () => put('<< /Type /Catalog /Pages 2 0 R >>'));
     obj(2, () => put(`<< /Type /Pages /Count ${imgs.length} /Kids [${imgs.map((_, i) => `${3 + 3 * i} 0 R`).join(' ')}] >>`));
     imgs.forEach((im, i) => {

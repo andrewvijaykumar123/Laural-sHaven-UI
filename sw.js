@@ -1,8 +1,8 @@
 // Offline support: the app shell is cached; live data stays with Firebase and its own offline cache.
-const CACHE = 'lh-shell-v1';
+const CACHE = 'lh-shell-v2';
 const SHELL = [
-  './', 'index.html', 'styles.css', 'fb-config.js', 'fb.js', 'core.js', 'map.js', 'map.css', 'mailtpl.js', 'app.js', 'pwa.js',
-  'manifest.webmanifest', 'assets/icon-192.png', 'assets/apple-touch-icon.png',
+  './', 'index.html', 'styles.css', 'fb-config.js', 'fb.js', 'core.js', 'map.js', 'map.css', 'mailtpl.js', 'invoicepdf.js', 'app.js', 'pwa.js',
+  'manifest.webmanifest', 'assets/icon-192.png', 'assets/icon-512.png', 'assets/apple-touch-icon.png',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css',
 ];
 

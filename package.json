@@ -1,0 +1,9 @@
+{
+  "name": "laural-s-haven-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Laural's Haven storefront (static PWA). Unit tests for the shared core and the invoice/mail helpers.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
