@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Laural's Haven | Gourmet Ordering</title>
   <meta name="description" content="Order burgers, wraps, tikkas, momos, shakes and more from Laural's Haven. Live order tracking, UPI payments.">
-  <meta name="theme-color" content="#120d0a">
+  <meta name="theme-color" content="#0c0a08">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,24 +22,35 @@
   <meta property="og:image:alt" content="Laural's Haven">
   <meta name="twitter:card" content="summary_large_image">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://*.googleapis.com; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230c0a08'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Georgia,serif' font-size='34' fill='%23d6b26e'%3EL%3C/text%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261101p">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20261113a">
+  <link rel="stylesheet" href="luxe.css?v=20261113a">
 </head>
 <body>
   <noscript><p style="padding:24px;text-align:center;font-family:sans-serif">Laural's Haven needs JavaScript to show the menu and send your order. Please turn it on and reload.</p></noscript>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-laurel" viewBox="0 0 24 24"><path d="M12 21V6"/><path d="M12 18c-3.5 0-5.5-2-6-4.5 3 0 5.2 1.4 6 4.5zM12 13c-3.5 0-5.5-2-6-4.5 3 0 5.2 1.4 6 4.5zM12 18c3.5 0 5.5-2 6-4.5-3 0-5.2 1.4-6 4.5zM12 13c3.5 0 5.5-2 6-4.5-3 0-5.2 1.4-6 4.5zM12 8.5C10.5 7.5 10.2 5.5 12 3c1.8 2.5 1.5 4.5 0 5.5z"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+    <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
+  </svg>
   <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <header class="topbar" id="topbar">
-    <a class="brand" href="#top" aria-label="Laural's Haven home"><span class="brand-mark">🍃</span><span>Laural's <b>Haven</b></span></a>
+    <a class="brand" href="#top" aria-label="Laural's Haven home"><span class="brand-mark"><svg class="ic"><use href="#i-laurel"/></svg></span><span>Laural's <b>Haven</b></span></a>
     <div class="top-actions">
       <span class="live-pill" id="livePill" title="Realtime connection"><i></i><span>Connecting</span></span>
-      <button class="icon-btn" id="eventsBtn" aria-label="Book an event" title="Book an event" hidden>🎉<span class="dot" id="eventsDot" hidden></span></button>
-      <button class="icon-btn" id="ordersBtn" aria-label="My orders" title="My orders">🧾<span class="dot" id="ordersDot" hidden></span></button>
-      <button class="icon-btn" id="themeBtn" aria-label="Toggle theme" title="Toggle theme">🌗</button>
-      <button class="cart-btn" id="cartBtn" aria-label="Open cart">🛒<span>Cart</span><b id="cartCount">0</b></button>
+      <button class="icon-btn" id="eventsBtn" aria-label="Book an event" title="Book an event" hidden><svg class="ic"><use href="#i-spark"/></svg><span class="dot" id="eventsDot" hidden></span></button>
+      <button class="icon-btn" id="ordersBtn" aria-label="My orders" title="My orders"><svg class="ic"><use href="#i-receipt"/></svg><span class="dot" id="ordersDot" hidden></span></button>
+      <button class="icon-btn" id="themeBtn" aria-label="Toggle theme" title="Toggle theme"><svg class="ic ic-sun"><use href="#i-sun"/></svg><svg class="ic ic-moon"><use href="#i-moon"/></svg></button>
+      <button class="cart-btn" id="cartBtn" aria-label="Open cart"><svg class="ic"><use href="#i-bag"/></svg><span>Cart</span><b id="cartCount">0</b></button>
     </div>
   </header>
 
@@ -49,16 +60,16 @@
     <section class="hero">
       <div class="float-layer" aria-hidden="true" id="floaters"></div>
       <div class="hero-inner">
-        <p class="eyebrow reveal">Fresh • Fast • Made with love</p>
+        <p class="eyebrow reveal">Café &amp; Kitchen</p>
         <h1 class="reveal">Gourmet bites,<br><em>made your way.</em></h1>
         <p class="lead reveal"><span id="menuCount">85</span> handcrafted items from tikkas to shakes. Order from your table or your sofa, pay by UPI, and watch it cook live.</p>
         <div class="hero-cta reveal">
           <a class="btn primary" href="#menu">Explore the menu</a>
           <button class="btn ghost" id="heroOrders">Track an order</button>
-          <button class="btn ghost" id="heroEvents" hidden>🎉 Book an event</button>
+          <button class="btn ghost" id="heroEvents" hidden>Book an event</button>
         </div>
-        <p class="deliv-note reveal" id="evHeroNote" hidden>🎉 Host your birthday, anniversary or meetup with us · ₹1,000 per hour</p>
-        <p class="deliv-note reveal" id="delivNote" hidden>🛵 Home delivery up to 15 km (free within 5 km) · follow your order live on the map</p>
+        <p class="deliv-note reveal" id="evHeroNote" hidden>Host your birthday, anniversary or meetup with us · ₹1,000 per hour</p>
+        <p class="deliv-note reveal" id="delivNote" hidden>Home delivery up to 15 km (free within 5 km) · follow your order live on the map</p>
         <ul class="stats reveal">
           <li><b data-count="85" data-stat="items">0</b><span>Menu items</span></li>
           <li><b data-count="18" data-stat="cats">0</b><span>Categories</span></li>
@@ -71,7 +82,7 @@
 
     <section class="menu-wrap" id="menu">
       <div class="toolbar">
-        <label class="search"><span aria-hidden="true">🔍</span><input id="search" type="search" placeholder="Search 85 dishes, drinks, combos..." autocomplete="off" aria-label="Search the menu"></label>
+        <label class="search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Search 85 dishes, drinks, combos..." autocomplete="off" aria-label="Search the menu"></label>
         <div class="diet" role="group" aria-label="Dietary filter">
           <button data-diet="all" class="on">All</button>
           <button data-diet="v"><i class="dd v"></i>Veg</button>
@@ -95,24 +106,24 @@
   <div class="scrim" id="scrim" hidden></div>
 
   <aside class="drawer" id="cartDrawer" aria-label="Your cart" aria-hidden="true" inert>
-    <header><h2>Your order</h2><button class="icon-btn" data-close aria-label="Close">✕</button></header>
+    <header><h2>Your order</h2><button class="icon-btn" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></header>
     <div class="drawer-body" id="cartBody"></div>
     <footer id="cartFoot"></footer>
   </aside>
 
   <aside class="drawer" id="ordersDrawer" aria-label="My orders" aria-hidden="true" inert>
-    <header><h2>My orders</h2><button class="icon-btn" data-close aria-label="Close">✕</button></header>
+    <header><h2>My orders</h2><button class="icon-btn" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></header>
     <div class="drawer-body" id="ordersBody"></div>
   </aside>
 
   <aside class="drawer" id="eventsDrawer" aria-label="Event bookings" aria-hidden="true" inert>
-    <header><h2>Events &amp; parties</h2><button class="icon-btn" data-close aria-label="Close">✕</button></header>
+    <header><h2>Events &amp; parties</h2><button class="icon-btn" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button></header>
     <div class="drawer-body" id="eventsBody"></div>
     <footer id="eventsFoot"></footer>
   </aside>
 
   <div class="trackview" id="trackView" hidden role="dialog" aria-modal="true" aria-labelledby="tvTitle">
-    <header><button class="icon-btn" id="tvClose" aria-label="Close tracking">✕</button><div><h2 id="tvTitle">Track order</h2><p id="tvSub" aria-live="polite"></p></div></header>
+    <header><button class="icon-btn" id="tvClose" aria-label="Close tracking"><svg class="ic"><use href="#i-x"/></svg></button><div><h2 id="tvTitle">Track order</h2><p id="tvSub" aria-live="polite"></p></div></header>
     <div class="tv-map"><div class="lh-map tall" id="tvMap"></div></div>
     <footer><div id="tvInfo" aria-live="polite"></div><button class="btn ghost sm" id="tvFit">Show everything on the map</button></footer>
   </div>

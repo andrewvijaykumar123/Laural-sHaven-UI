@@ -74,10 +74,7 @@
     document.documentElement.dataset.theme = t;
     store.set('theme', t);
     const btn = $('#themeBtn');
-    if (btn) {
-      btn.textContent = t === 'dark' ? '🌙' : '☀️';
-      btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} theme`);
-    }
+    if (btn) btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} theme`);
   };
   setTheme(store.get('theme', matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
   $('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
@@ -1292,7 +1289,7 @@
     const cv = $('#confetti');
     const ctx = cv.getContext('2d');
     cv.width = innerWidth; cv.height = innerHeight;
-    const colors = ['#ffb454', '#ff7a45', '#34d399', '#60a5fa', '#ff4d8d'];
+    const colors = ['#efd9a3', '#d6b26e', '#b08d4f', '#f4ece0', '#8a6a2c'];
     const bits = Array.from({ length: 130 }, () => ({ x: innerWidth / 2, y: innerHeight * 0.4, vx: (Math.random() - 0.5) * 16, vy: -Math.random() * 15 - 4, s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, c: colors[(Math.random() * colors.length) | 0] }));
     let frames = 0;
     (function draw() {
