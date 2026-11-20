@@ -621,7 +621,7 @@
     syncPush();
   }
   const goTo = (h) => { if (h === '#orders') openDrawer('ordersDrawer'); else if (h === '#events') openDrawer('eventsDrawer'); };
-  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => goTo(e.data && e.data.lhGo));
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => { goTo(e.data && e.data.lhGo); if (e.data && e.data.lhPush) toast(`${e.data.lhPush.t}: ${e.data.lhPush.b}`, 'ok'); });
 
   function showSuccess(o) {
     const pay = o.pay === 'upi'
