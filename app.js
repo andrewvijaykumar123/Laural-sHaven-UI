@@ -77,18 +77,55 @@
     if (btn) btn.setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} theme`);
   };
   setTheme(store.get('theme', matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-  $('#themeBtn').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+  // The new theme grows out of the button as a circle where the browser supports view transitions.
+  $('#themeBtn').addEventListener('click', (e) => {
+    const next = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+    if (!document.startViewTransition || reduceMotion || document.visibilityState !== 'visible') { next(); return; }
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    const t = document.startViewTransition(next);
+    t.ready.then(() => document.documentElement.animate({ clipPath: [`circle(0 at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] }, { duration: 700, easing: 'cubic-bezier(.22,.8,.24,1)', pseudoElement: '::view-transition-new(root)' })).catch(() => {});
+  });
+
+  /* ---------- Haven Hours: the room and the greeting follow the time of day ---------- */
+  const GREETING = { dawn: 'Good morning', day: 'Good afternoon', dusk: 'Golden hour', night: 'Good evening' };
+  function setHour() {
+    const h = new Date().getHours();
+    const band = h >= 5 && h < 11 ? 'dawn' : h >= 11 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'dusk' : 'night';
+    document.documentElement.dataset.hour = band;
+    $('#greet').textContent = `${GREETING[band]} \u00b7 Caf\u00e9 & Kitchen`;
+  }
+  setHour();
+  setInterval(setHour, 10 * 60000);
 
   /* ---------- Menu rendering ---------- */
   const cardHTML = (it) => `
     <article class="card reveal" data-id="${it.id}" data-cat="${it.cat}" style="--h:${MENU.find((c) => c.id === it.cat).hue % 360}">
-      <div class="card-top">
+      <div class="card-top" data-dish tabindex="0" role="button" aria-label="Details: ${esc(it.name)}">
         <div class="emoji" aria-hidden="true">${it.icon}</div>
         <div><h3>${esc(it.name)}</h3>
           <div class="meta"><i class="dd ${it.diet}" title="${DIET[it.diet]}"></i>${it.best ? '<span class="tag">Bestseller</span>' : ''}<span class="tag out" hidden>Sold out</span></div></div>
       </div>
+      ${it.desc ? `<p class="desc">${esc(it.desc)}</p>` : ''}
       <div class="card-bot"><span class="price">${fmt(it.price)}</span><span class="ctl"></span></div>
     </article>`;
+
+  // The chip bar follows the section being read; rebuilt sections must be watched again.
+  let catIO = null;
+  const watchCats = () => { if (!catIO) return; catIO.disconnect(); $$('.cat').forEach((s) => catIO.observe(s)); };
+
+  function buildSignature() {
+    const picks = [...ITEMS.values()].filter((i) => i.best && !i.hide);
+    const box = $('#signature');
+    box.hidden = picks.length < 3;
+    $('#sigRow').innerHTML = box.hidden ? '' : picks.map((it) => {
+      const c = MENU.find((x) => x.id === it.cat);
+      return `<article class="sig" data-id="${it.id}" style="--h:${c.hue % 360}"><div class="sig-ico" aria-hidden="true">${it.icon}</div><h3>${esc(it.name)}</h3><p>${esc(it.desc || c.tagline)}</p><div class="sig-bot"><span class="price">${fmt(it.price)}</span><button class="add" data-sig="${it.id}">Add</button></div></article>`;
+    }).join('');
+    picks.forEach((it) => updateCard(it.id));
+  }
 
   function buildMenu() {
     $('#menuRoot').innerHTML = MENU.map((c) => `
@@ -98,14 +135,23 @@
       </section>`).join('');
     $('#chips').innerHTML = MENU.map((c) => `<button class="chip" data-cat="${c.id}">${c.icon} ${esc(c.name.replace(/ \(.*\)/, ''))} <small>${c.items.length}</small></button>`).join('');
     $$('.card').forEach((card) => updateCard(card.dataset.id));
+    buildSignature();
+    watchCats();
     observeReveal();
   }
 
   function updateCard(id) {
-    const card = $(`.card[data-id="${CSS.escape(id)}"]`);
-    if (!card) return;
-    const qty = cart[id] || 0;
+    const sel = CSS.escape(id);
     const out = isOut(id);
+    const qty = cart[id] || 0;
+    $$(`.sig[data-id="${sel}"]`).forEach((s) => {
+      s.classList.toggle('sold', out);
+      const b = $('[data-sig]', s);
+      b.disabled = out;
+      b.textContent = out ? 'Sold out' : qty ? `Add \u00b7 ${qty}` : 'Add';
+    });
+    const card = $(`.card[data-id="${sel}"]`);
+    if (!card) return;
     card.classList.toggle('sold', out);
     $('.tag.out', card).hidden = !out;
     const ctl = $('.ctl', card);
@@ -166,6 +212,8 @@
     renderCartUI();
     if (delta > 0 && sourceEl && !reduceMotion) flyTo(sourceEl, ITEMS.get(id).icon);
     if (delta > 0) { const btn = $('#cartBtn'); btn.classList.remove('bump'); void btn.offsetWidth; btn.classList.add('bump'); }
+    if (delta > 0 && navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(12);
+    if (canSheet && sheet.matches(':popover-open') && sheet.dataset.id === id) renderDish(id);
   }
 
   function flyTo(fromEl, icon) {
@@ -184,9 +232,51 @@
     setTimeout(() => el.remove(), 750);
   }
 
+  /* ---------- Dish sheet (Popover API: top layer, Esc and tap-outside close it) ---------- */
+  const sheet = $('#dishSheet');
+  const canSheet = !!sheet && typeof sheet.showPopover === 'function';
+  function renderDish(id) {
+    const it = ITEMS.get(id);
+    const c = it && MENU.find((x) => x.id === it.cat);
+    if (!c) return;
+    const qty = cart[id] || 0;
+    sheet.dataset.id = id;
+    sheet.innerHTML = `<button class="icon-btn sheet-x" popovertarget="dishSheet" popovertargetaction="hide" aria-label="Close" autofocus><svg class="ic"><use href="#i-x"/></svg></button>
+      <div class="sheet-ico" aria-hidden="true" style="--h:${c.hue % 360}">${it.icon}</div>
+      <p class="sheet-cat">${esc(c.name)}</p>
+      <h2>${esc(it.name)}</h2>
+      <div class="meta"><i class="dd ${it.diet}"></i><span>${DIET[it.diet]}</span>${it.best ? '<span class="tag">Bestseller</span>' : ''}</div>
+      <p class="sheet-desc">${esc(it.desc || c.tagline)}</p>
+      <div class="sheet-bot"><span class="price">${fmt(it.price)}</span>${isOut(id) ? '<span class="tag out">Unavailable</span>' : qty ? `<div class="step"><button data-sheet="dec" aria-label="Remove one">−</button><b>${qty}</b><button data-sheet="inc" aria-label="Add one">+</button></div>` : '<button class="add" data-sheet="inc">Add to order</button>'}</div>`;
+  }
+  function openDish(id) {
+    const it = ITEMS.get(id);
+    if (!canSheet || !it || it.hide) return;
+    renderDish(id);
+    if (!sheet.matches(':popover-open')) sheet.showPopover();
+  }
+  if (canSheet) {
+    sheet.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sheet]');
+      if (b) change(sheet.dataset.id, b.dataset.sheet === 'inc' ? 1 : -1, b);
+    });
+    $('#menuRoot').addEventListener('keydown', (e) => {
+      const top = e.target.closest && e.target.closest('[data-dish]');
+      if (top && e.target === top && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDish(top.closest('.card').dataset.id); }
+    });
+  }
+  $('#sigRow').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sig]');
+    if (b) change(b.dataset.sig, 1, b);
+  });
+
   $('#menuRoot').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-act]');
-    if (!btn) return;
+    if (!btn) {
+      const top = e.target.closest('[data-dish]');
+      if (top) openDish(top.closest('.card').dataset.id);
+      return;
+    }
     const card = btn.closest('.card');
     change(card.dataset.id, btn.dataset.act === 'inc' ? 1 : -1, btn);
   });
@@ -1239,12 +1329,21 @@
     requestAnimationFrame(() => $$('.hero .reveal').forEach((el) => el.classList.add('in')));
   }
 
+  const tilt = !reduceMotion && matchMedia('(hover: hover) and (pointer: fine)').matches;
   document.addEventListener('pointermove', (e) => {
     const card = e.target.closest && e.target.closest('.card');
     if (!card) return;
     const r = card.getBoundingClientRect();
     card.style.setProperty('--mx', `${e.clientX - r.left}px`);
     card.style.setProperty('--my', `${e.clientY - r.top}px`);
+    if (tilt) {
+      card.style.setProperty('--ry', `${((e.clientX - r.left) / r.width - 0.5) * 7}deg`);
+      card.style.setProperty('--rx', `${-((e.clientY - r.top) / r.height - 0.5) * 7}deg`);
+    }
+  }, { passive: true });
+  document.addEventListener('pointerout', (e) => {
+    const card = tilt && e.target.closest && e.target.closest('.card');
+    if (card && !card.contains(e.relatedTarget)) { card.style.removeProperty('--rx'); card.style.removeProperty('--ry'); }
   }, { passive: true });
 
   window.addEventListener('scroll', () => $('#topbar').classList.toggle('scrolled', scrollY > 10), { passive: true });
@@ -1273,6 +1372,7 @@
       });
     }, { rootMargin: `-${Math.round((parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 140) + 8)}px 0px -65% 0px` });
     $$('.cat').forEach((s) => io.observe(s));
+    catIO = io;
     addEventListener('scroll', () => {
       if (innerHeight + scrollY < document.documentElement.scrollHeight - 4) return;
       const last = [...$$('.cat')].reverse().find((s) => !s.hidden && s.offsetParent);

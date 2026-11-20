@@ -26,8 +26,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261114a">
-  <link rel="stylesheet" href="luxe.css?v=20261114a">
+  <link rel="stylesheet" href="styles.css?v=20261120a">
+  <link rel="stylesheet" href="luxe.css?v=20261120a">
 </head>
 <body>
   <noscript><p style="padding:24px;text-align:center;font-family:sans-serif">Laural's Haven needs JavaScript to show the menu and send your order. Please turn it on and reload.</p></noscript>
@@ -42,7 +42,7 @@
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
   </svg>
   <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
-
+  <i class="progress" aria-hidden="true"></i>
   <header class="topbar" id="topbar">
     <a class="brand" href="#top" aria-label="Laural's Haven home"><span class="brand-mark"><svg class="ic"><use href="#i-laurel"/></svg></span><span>Laural's <b>Haven</b></span></a>
     <div class="top-actions">
@@ -60,7 +60,7 @@
     <section class="hero">
       <div class="float-layer" aria-hidden="true" id="floaters"></div>
       <div class="hero-inner">
-        <p class="eyebrow reveal">Café &amp; Kitchen</p>
+        <p class="eyebrow reveal" id="greet">Café &amp; Kitchen</p>
         <h1 class="reveal">Gourmet bites,<br><em>made your way.</em></h1>
         <p class="lead reveal"><span id="menuCount">85</span> handcrafted items from tikkas to shakes. Order from your table or your sofa, pay by UPI, and watch it cook live.</p>
         <div class="hero-cta reveal">
@@ -79,6 +79,12 @@
     </section>
 
     <div class="marquee" aria-hidden="true"><div id="marquee"></div></div>
+
+    <section class="signature" id="signature" aria-labelledby="sigTitle" hidden>
+      <p class="sig-eyebrow">The house favourites</p>
+      <h2 id="sigTitle">Signatures</h2>
+      <div class="sig-row" id="sigRow"></div>
+    </section>
 
     <section class="menu-wrap" id="menu">
       <div class="toolbar">
@@ -127,6 +133,7 @@
     <div class="tv-map"><div class="lh-map tall" id="tvMap"></div></div>
     <footer><div id="tvInfo" aria-live="polite"></div><button class="btn ghost sm" id="tvFit">Show everything on the map</button></footer>
   </div>
+  <div popover class="sheet" id="dishSheet" aria-label="Dish details"></div>
   <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-card" id="modalCard"></div></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
 <div id="printArea" aria-hidden="true"></div>
@@ -134,10 +141,10 @@
 
   <script src="fb-config.js"></script>
   <script src="fb.js"></script>
-  <script src="core.js?v=20261102d"></script>
+  <script src="core.js?v=20261120a"></script>
   <script src="map.js?v=20261101b"></script>
 <script src="mailtpl.js?v=20261101b"></script>
-  <script src="app.js?v=20261110a"></script>
+  <script src="app.js?v=20261120a"></script>
   <script src="pwa.js"></script>
 </body>
 </html>
