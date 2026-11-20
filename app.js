@@ -587,6 +587,26 @@
   const otpBox = (o) => (o.svc === 'deliver' && LH.validOtp(o.otp) && !['completed', 'rejected'].includes(o.status)
     ? `<div class="otp-box" role="group" aria-label="Delivery code"><small>Your delivery code</small><b>${esc(o.otp)}</b><span>Give it to the delivery partner only when you receive your order.${o.em ? ' We also emailed it to you.' : ''}</span></div>` : '');
 
+  /* ---------- Background alerts (Web Push) ---------- */
+  const pushBox = (id) => {
+    const p = LH.pushPermission();
+    if (p === 'unsupported') return window.LH_PUSH && window.LH_PUSH.key && /iP(hone|ad|od)/.test(navigator.userAgent) && !navigator.standalone
+      ? '<p class="push-note">On iPhone, add this app to your Home Screen (Share, then Add to Home Screen) to get alerts when this page is closed.</p>' : '';
+    if (p === 'denied') return '<p class="push-note">Alerts are blocked for this site. Turn notifications on in your browser settings to get them.</p>';
+    return `<div class="push-box" id="pushBox"><span>\u{1F514} Get alerts on this device, even when this page is closed.</span>${p === 'granted' ? '' : '<button class="btn primary sm" id="pushOn">Turn on alerts</button>'}</div>`;
+  };
+  function pushWire(id) {
+    const box = $('#pushBox');
+    if (!box) return;
+    const say = (r) => { box.innerHTML = `<span>${{ on: '\u{1F514} Alerts are on. We will tell you when the status changes.', denied: 'Alerts are blocked in your browser settings.', error: 'Could not turn on alerts right now.' }[r] || 'Alerts are off.'}</span>`; };
+    if (LH.pushPermission() === 'granted') { box.innerHTML = '<span>Turning on alerts...</span>'; LH.pushEnable('shop', id, false).then(say); }
+    const b = $('#pushOn');
+    if (b) b.addEventListener('click', async () => { b.disabled = true; say(await LH.pushEnable('shop', id, true)); });
+  }
+  // Tapping a notification brings the right drawer up (a cold start arrives with the hash instead).
+  const goTo = (h) => { if (h === '#orders') openDrawer('ordersDrawer'); else if (h === '#events') openDrawer('eventsDrawer'); };
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => goTo(e.data && e.data.lhGo));
+
   function showSuccess(o) {
     const pay = o.pay === 'upi'
       ? `<div class="upi-box"><small>Pay to this phone number</small><b id="upiPhone">${esc(UPI.phone)}</b><button type="button" class="btn primary" id="copyUpi">Copy number</button></div>`
@@ -596,7 +616,9 @@
       ${cancelBox(o, true)}
       ${otpBox(o)}
       ${pay}
+      ${pushBox(o.id)}
       <div class="row-btns"><button class="btn ghost" id="trackNow">Track my order</button><button class="btn ghost" data-modal-close>Keep browsing</button></div>`);
+    pushWire(o.id);
     $('#trackNow').addEventListener('click', () => { closeModal(); openDrawer('ordersDrawer'); });
     const copy = $('#copyUpi');
     if (copy) copy.addEventListener('click', async () => {
@@ -1155,7 +1177,9 @@
     openModal(`<h2 id="modalTitle">Booking requested 🎉</h2>
       <p style="color:var(--muted)">Your booking ID is <span class="oid">${esc(e.id)}</span>. It is not final until we confirm it. The status updates live in My bookings.</p>
       <div class="pay-note"><b>${t.icon} ${esc(t.label)}</b><br>${esc(evWhen(e))} · ${e.g} guest${e.g === 1 ? '' : 's'}<br>Total <b>${fmt(e.total)}</b>, payable at the cafe on the day.</div>
+      ${pushBox(e.id)}
       <div class="row-btns"><button class="btn ghost" id="evMine">View my bookings</button><button class="btn ghost" data-modal-close>Close</button></div>`);
+    pushWire(e.id);
     $('#evMine').addEventListener('click', () => { closeModal(); openDrawer('eventsDrawer'); });
   }
 
@@ -1408,5 +1432,6 @@
   applyEvCfg();
   renderCartUI();
   window.addEventListener('storage', () => { orders = loadOrders(orders); });
+  goTo(location.hash);
   window.__lh = { get cart() { return cart; }, get orders() { return orders; }, get events() { return events; } };
 })();
