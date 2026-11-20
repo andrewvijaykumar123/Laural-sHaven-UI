@@ -604,6 +604,22 @@
     if (b) b.addEventListener('click', async () => { b.disabled = true; say(await LH.pushEnable('shop', id, true)); });
   }
   // Tapping a notification brings the right drawer up (a cold start arrives with the hash instead).
+  // Every device is asked once (the browser only allows this from a tap); once allowed, each order and booking registers itself.
+  const activeIds = () => [...orders.filter((o) => !['completed', 'rejected'].includes(o.status)).map((o) => o.id), ...events.filter((e) => ['pending', 'confirmed'].includes(e.status)).map((e) => e.id)];
+  const syncPush = () => { if (LH.pushPermission() === 'granted') activeIds().forEach((id) => LH.pushEnable('shop', id, false)); };
+  function initPush() {
+    const bar = $('#pushBar');
+    const show = () => { bar.hidden = LH.pushPermission() !== 'default' || Date.now() - store.get('pushBarX', 0) < 3 * 864e5; };
+    show();
+    $('#pushBarOn').addEventListener('click', async () => {
+      const p = await LH.pushAllow();
+      toast(p === 'granted' ? 'Alerts are on. We will tell you when your order changes.' : p === 'denied' ? 'Alerts are blocked in your browser settings.' : 'Alerts were not turned on.', p === 'granted' ? 'ok' : 'bad');
+      show();
+      syncPush();
+    });
+    $('#pushBarX').addEventListener('click', () => { store.set('pushBarX', Date.now()); show(); });
+    syncPush();
+  }
   const goTo = (h) => { if (h === '#orders') openDrawer('ordersDrawer'); else if (h === '#events') openDrawer('eventsDrawer'); };
   if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => goTo(e.data && e.data.lhGo));
 
@@ -1433,5 +1449,6 @@
   renderCartUI();
   window.addEventListener('storage', () => { orders = loadOrders(orders); });
   goTo(location.hash);
+  initPush();
   window.__lh = { get cart() { return cart; }, get orders() { return orders; }, get events() { return events; } };
 })();
