@@ -9,6 +9,7 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const LHM = window.LHM;
 
   /* ---------- State ---------- */
   let cart = store.get('cart', {});
@@ -52,7 +53,7 @@
     el.className = `toast ${kind}`;
     el.textContent = msg;
     $('#toasts').appendChild(el);
-    setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, 3200);
+    setTimeout(() => LHM.dismiss(el), 3200);
   }
 
   /* ---------- Last-resort error reporting ---------- */
@@ -161,6 +162,9 @@
   }
 
   function applyFilters() {
+    LHM.flip($('#menuRoot'), '.card, .cat-head', (el) => el.dataset.id || `h:${el.parentElement.dataset.cat}`, filterNow);
+  }
+  function filterNow() {
     const q = filters.q.trim().toLowerCase();
     let visible = 0;
     $$('.cat').forEach((sec) => {
@@ -207,29 +211,53 @@
     if (!orderable(id) || (delta > 0 && isOut(id))) return;
     const next = Math.min(25, Math.max(0, (cart[id] || 0) + delta));
     if (next) cart[id] = next; else delete cart[id];
+    // updateCard replaces the pressed button, so measure it first.
+    const from = delta > 0 && sourceEl && sourceEl.isConnected && !reduceMotion ? sourceEl.getBoundingClientRect() : null;
     saveCart();
     updateCard(id);
     renderCartUI();
-    if (delta > 0 && sourceEl && !reduceMotion) flyTo(sourceEl, ITEMS.get(id).icon);
-    if (delta > 0) { const btn = $('#cartBtn'); btn.classList.remove('bump'); void btn.offsetWidth; btn.classList.add('bump'); }
-    if (delta > 0 && navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(12);
+    if (delta > 0) {
+      if (from && from.width) flyTo(from, ITEMS.get(id).icon);
+      else LHM.pop($('#cartCount'), 1.4);
+      LHM.haptic(12);
+    }
     if (canSheet && sheet.matches(':popover-open') && sheet.dataset.id === id) renderDish(id);
+    LHM.pop($(`.card[data-id="${CSS.escape(id)}"] .step b`), 1.45);
+    if (canSheet && sheet.dataset.id === id) LHM.pop($('.step b', sheet), 1.45);
   }
 
-  function flyTo(fromEl, icon) {
-    const a = fromEl.getBoundingClientRect();
-    const b = $('#cartBtn').getBoundingClientRect();
+  // The dish leaps along a gravity arc into the cart: x and y run on separate easings, which is what makes it a curve.
+  function flyTo(a, icon) {
+    const cart = $('#cartBtn');
+    const b = cart.getBoundingClientRect();
     const el = document.createElement('div');
     el.className = 'fly';
-    el.textContent = icon;
+    el.setAttribute('aria-hidden', 'true');
+    const inner = document.createElement('span');
+    inner.style.display = 'inline-block';
+    inner.textContent = icon;
+    el.appendChild(inner);
     el.style.left = `${a.left + a.width / 2}px`;
-    el.style.top = `${a.top}px`;
+    el.style.top = `${a.top + a.height / 2}px`;
     document.body.appendChild(el);
-    requestAnimationFrame(() => {
-      el.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(.3)`;
-      el.style.opacity = '.2';
-    });
-    setTimeout(() => el.remove(), 750);
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+    const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    const lift = Math.min(-70, dy * 0.35 - 110);
+    const ms = Math.min(950, 620 + Math.hypot(dx, dy) * 0.25);
+    LHM.burst(a.left + a.width / 2, a.top + a.height / 2, { count: 10, speed: 3.6, size: 2.2, life: 28 });
+    el.animate([{ transform: 'translate(-50%,-50%)' }, { transform: `translate(calc(-50% + ${dx}px),-50%)` }], { duration: ms, easing: 'cubic-bezier(.35,0,.65,1)', fill: 'forwards' });
+    const fly = inner.animate([
+      { transform: 'translateY(0) scale(.5) rotate(0deg)', opacity: 0, easing: 'cubic-bezier(.15,.7,.35,1)' },
+      { transform: `translateY(${lift}px) scale(1.5) rotate(-14deg)`, opacity: 1, offset: 0.4, easing: 'cubic-bezier(.65,0,.9,.45)' },
+      { transform: `translateY(${dy}px) scale(.3) rotate(32deg)`, opacity: 0.7 }
+    ], { duration: ms, fill: 'forwards' });
+    const land = () => {
+      el.remove();
+      LHM.play(cart, [{ transform: 'scale(1)' }, { transform: 'scale(1.2,.84)', offset: 0.18 }, { transform: 'scale(.92,1.08)', offset: 0.42 }, { transform: 'scale(1.04,.97)', offset: 0.7 }, { transform: 'scale(1)' }], { duration: 700, easing: 'ease-out' });
+      LHM.pop($('#cartCount'), 1.6);
+      LHM.burstAt(cart, { count: 16, speed: 5, size: 2.6, life: 34 });
+    };
+    fly.finished.then(land, () => el.remove());
   }
 
   /* ---------- Dish sheet (Popover API: top layer, Esc and tap-outside close it) ---------- */
@@ -249,11 +277,22 @@
       <p class="sheet-desc">${esc(it.desc || c.tagline)}</p>
       <div class="sheet-bot"><span class="price">${fmt(it.price)}</span>${isOut(id) ? '<span class="tag out">Unavailable</span>' : qty ? `<div class="step"><button data-sheet="dec" aria-label="Remove one">−</button><b>${qty}</b><button data-sheet="inc" aria-label="Add one">+</button></div>` : '<button class="add" data-sheet="inc">Add to order</button>'}</div>`;
   }
-  function openDish(id) {
+  // The card's icon morphs into the sheet's icon (a shared-element transition done by hand, so it never delays the DOM).
+  function openDish(id, fromEl) {
     const it = ITEMS.get(id);
     if (!canSheet || !it || it.hide) return;
+    const src = fromEl && $('.emoji', fromEl);
+    const a = src && src.getBoundingClientRect();
+    const wasOpen = sheet.matches(':popover-open');
     renderDish(id);
-    if (!sheet.matches(':popover-open')) sheet.showPopover();
+    if (!wasOpen) sheet.showPopover();
+    if (wasOpen) return;
+    const ico = $('.sheet-ico', sheet);
+    if (a && a.width && ico) {
+      const b = ico.getBoundingClientRect();
+      LHM.play(ico, [{ transform: `translate(${a.left + a.width / 2 - (b.left + b.width / 2)}px,${a.top + a.height / 2 - (b.top + b.height / 2)}px) scale(${(a.width / b.width).toFixed(3)})` }, { transform: 'none' }], { spring: 'bounce' });
+    }
+    LHM.stagger($$('.sheet-cat, .sheet h2, .sheet .meta, .sheet-desc, .sheet-bot', sheet), [{ transform: 'translateY(1rem)', opacity: 0 }, { transform: 'none', opacity: 1 }], { delay: 140, gap: 50, spring: 'snap' });
   }
   if (canSheet) {
     sheet.addEventListener('click', (e) => {
@@ -262,7 +301,7 @@
     });
     $('#menuRoot').addEventListener('keydown', (e) => {
       const top = e.target.closest && e.target.closest('[data-dish]');
-      if (top && e.target === top && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDish(top.closest('.card').dataset.id); }
+      if (top && e.target === top && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openDish(top.closest('.card').dataset.id, top); }
     });
   }
   $('#sigRow').addEventListener('click', (e) => {
@@ -274,7 +313,7 @@
     const btn = e.target.closest('[data-act]');
     if (!btn) {
       const top = e.target.closest('[data-dish]');
-      if (top) openDish(top.closest('.card').dataset.id);
+      if (top) openDish(top.closest('.card').dataset.id, top);
       return;
     }
     const card = btn.closest('.card');
@@ -480,6 +519,7 @@
     if (id === 'cartDrawer') { checkout = false; renderCartDrawer(); renderCartUI(); }
     if (id === 'ordersDrawer') { renderOrders(); $('#ordersDot').hidden = true; }
     if (id === 'eventsDrawer') { if (!evOn()) evView = 'mine'; renderEvents(); $('#eventsDot').hidden = true; }
+    LHM.stagger($$('.drawer-body > *, .drawer > footer', d), [{ transform: 'translateX(2.5rem)', opacity: 0 }, { transform: 'none', opacity: 1 }], { delay: 110, gap: 55, max: 8, spring: 'snap' });
     setTimeout(() => { const f = $('button, input', d); if (f) f.focus(); }, 80);
   }
   function closeDrawers(silent) {
@@ -574,7 +614,6 @@
       closeDrawers(true);
       renderCartUI();
       showSuccess(orders[0]);
-      confetti();
     } catch (err) {
       toast('Could not place the order. Please try again.', 'bad');
       delete btn.dataset.busy;
@@ -627,7 +666,7 @@
     const pay = o.pay === 'upi'
       ? `<div class="upi-box"><small>Pay to this phone number</small><b id="upiPhone">${esc(UPI.phone)}</b><button type="button" class="btn primary" id="copyUpi">Copy number</button></div>`
       : `<div class="pay-note">${o.svc === 'deliver' ? `Please keep <b>${fmt(o.total)}</b> in cash ready for the delivery partner.` : 'Please pay at the counter when you collect or finish your meal.'}</div>`;
-    openModal(`<h2 id="modalTitle">Order placed 🎉</h2>
+    openModal(`<div class="lhm-seal" aria-hidden="true"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7.5 7.5L37 20"/></svg></div><h2 id="modalTitle">Order placed 🎉</h2>
       <p style="color:var(--muted)">Your order ID is <span class="oid">${esc(o.id)}</span>. Keep this page open to see live status.${o.svc === 'deliver' ? ' When your order is out for delivery you can follow it live on the map.' : ''}</p>
       ${cancelBox(o, true)}
       ${otpBox(o)}
@@ -635,6 +674,10 @@
       ${pushBox(o.id)}
       <div class="row-btns"><button class="btn ghost" id="trackNow">Track my order</button><button class="btn ghost" data-modal-close>Keep browsing</button></div>`);
     pushWire(o.id);
+    LHM.stagger($$('#modalCard > :not(.lhm-seal)'), [{ transform: 'translateY(1.2rem)', opacity: 0 }, { transform: 'none', opacity: 1 }], { delay: 260, gap: 70, spring: 'snap' });
+    LHM.haptic([14, 70, 28]);
+    LHM.confetti(innerWidth / 2, innerHeight * 0.3);
+    setTimeout(() => { const s = $('#modalCard .lhm-seal'); if (s && s.offsetParent) LHM.burstAt(s, { count: 30, speed: 7, size: 3, life: 42 }); }, 1000);
     $('#trackNow').addEventListener('click', () => { closeModal(); openDrawer('ordersDrawer'); });
     const copy = $('#copyUpi');
     if (copy) copy.addEventListener('click', async () => {
@@ -1283,8 +1326,24 @@
       if (!$('#ordersDrawer').classList.contains('open')) $('#ordersDot').hidden = false;
     }
     if ($('#ordersDrawer').classList.contains('open')) renderOrders();
+    if (changed) celebrateStatus(id, s);
     if (trackId === id) { drawRider(); renderTrack(); }
   });
+  // The tracker fills to the new step, the badge flips over and the card rings once.
+  function celebrateStatus(id, s) {
+    LHM.haptic(s === 'rejected' ? [40, 60, 40] : [16, 50, 16]);
+    const card = $(`.order-card[data-id="${CSS.escape(id)}"]`);
+    if (!card || !card.offsetParent) return;
+    card.classList.remove('lhm-hit'); void card.offsetWidth; card.classList.add('lhm-hit');
+    LHM.play($('.badge', card), [{ transform: 'perspective(20rem) rotateX(95deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { spring: 'bounce' });
+    const done = $$('.st.done', card).pop();
+    const st = $('.st.now', card) || done;
+    if (done) LHM.play(done, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { pseudoElement: '::before', spring: 'soft' });
+    if (st) {
+      LHM.play($('i', st), [{ transform: 'scale(.3) rotate(-90deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { delay: 220 });
+      setTimeout(() => { if (st.isConnected) LHM.burstAt($('i', st), { count: s === 'completed' || s === 'ready' ? 26 : 14, speed: 4.5, size: 2.6 }); }, 380);
+    }
+  }
   LH.on('loc', ({ id, lat, lng, acc, lts }) => {
     const o = orders.find((x) => x.id === id);
     if (!o || o.svc !== 'deliver' || ['completed', 'rejected'].includes(o.status)) return;
@@ -1424,25 +1483,39 @@
     }, { passive: true });
   }
 
-  function confetti() {
-    if (reduceMotion) return;
-    const cv = $('#confetti');
-    const ctx = cv.getContext('2d');
-    cv.width = innerWidth; cv.height = innerHeight;
-    const colors = ['#efd9a3', '#d6b26e', '#b08d4f', '#f4ece0', '#8a6a2c'];
-    const bits = Array.from({ length: 130 }, () => ({ x: innerWidth / 2, y: innerHeight * 0.4, vx: (Math.random() - 0.5) * 16, vy: -Math.random() * 15 - 4, s: 5 + Math.random() * 6, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, c: colors[(Math.random() * colors.length) | 0] }));
-    let frames = 0;
-    (function draw() {
-      ctx.clearRect(0, 0, cv.width, cv.height);
-      bits.forEach((b) => { b.vy += 0.4; b.x += b.vx; b.y += b.vy; b.r += b.vr; ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c; ctx.fillRect(-b.s / 2, -b.s / 2, b.s, b.s * 0.6); ctx.restore(); });
-      if (++frames < 170) requestAnimationFrame(draw); else ctx.clearRect(0, 0, cv.width, cv.height);
-    })();
+  const confetti = () => LHM.confetti();
+
+  // Headline words rise out of a mask one after another; each word of the gold line keeps its own gradient.
+  function splitHeadline() {
+    const h1 = $('.hero h1');
+    if (!h1 || reduceMotion) return;
+    let i = 0;
+    const word = (text, em) => {
+      const w = document.createElement('span');
+      w.className = 'lhm-w';
+      const inner = document.createElement('span');
+      inner.style.setProperty('--i', i++);
+      if (em) { const e = em.cloneNode(false); e.textContent = text; inner.appendChild(e); } else inner.textContent = text;
+      w.appendChild(inner);
+      return w;
+    };
+    const split = (text, em) => {
+      const frag = document.createDocumentFragment();
+      text.split(/(\s+)/).forEach((p) => { if (p) frag.append(/^\s+$/.test(p) ? p : word(p, em)); });
+      return frag;
+    };
+    [...h1.childNodes].forEach((n) => {
+      if (n.nodeType === 3) n.replaceWith(split(n.textContent));
+      else if (n.nodeName === 'EM') n.replaceWith(split(n.textContent, n));
+    });
   }
 
   /* ---------- Boot ---------- */
   buildMenu();
-  applyFilters();
+  filterNow();
+  splitHeadline();
   setupHero();
+  LHM.stagger($$('#chips .chip:not([hidden])'), [{ transform: 'translateY(.9rem)', opacity: 0 }, { transform: 'none', opacity: 1 }], { delay: 450, gap: 40, max: 14, spring: 'snap' });
   spy();
   applyCfg();
   applyEvCfg();
