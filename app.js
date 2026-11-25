@@ -1410,7 +1410,7 @@
     const s = { items: [...ITEMS.values()].filter((i) => !i.hide).length, cats: MENU.filter((c) => c.items.length).length };
     const lead = $('#menuCount');
     if (lead) lead.textContent = s.items;
-    $('#search').placeholder = `Search ${s.items} dishes, drinks, combos...`;
+    $('#search').placeholder = `Search ${s.items} dishes and drinks...`;
     $$('[data-stat]').forEach((el) => { el.dataset.count = s[el.dataset.stat]; });
   }
 

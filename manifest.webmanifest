@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Laural's Haven",
   "short_name": "Laural's Haven",
-  "description": "Order burgers, wraps, tikkas, momos, shakes and more from Laural's Haven.",
+  "description": "Order burgers, wraps, momos, loaded fries, shakes and more from Laural's Haven.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

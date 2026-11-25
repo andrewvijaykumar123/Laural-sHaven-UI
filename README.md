@@ -22,7 +22,7 @@ Free-tier capacity (Firestore Spark): about 20,000 writes and 50,000 reads per d
 ## Files
 
 - `index.html`, `styles.css`, `app.js` - storefront UI
-- `core.js` - shared menu (85 items, 18 categories) and Firebase layer (identical copy lives in the admin repo)
+- `core.js` - shared menu (50 items, 11 categories) and Firebase layer (identical copy lives in the admin repo)
 - `fb.js` - self-hosted Firebase SDK bundle (built from `tools/fb` in the admin repo)
 - `fb-config.js` - public Firebase web config
 
